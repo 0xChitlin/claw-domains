@@ -1,0 +1,27 @@
+{
+  "name": "claw-domains",
+  "version": "0.1.0",
+  "description": "On-chain generative art NFT domains for agent identity on Abstract Chain",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:testnet": "hardhat deploy-zksync --script deploy.ts --network abstractTestnet",
+    "deploy:mainnet": "hardhat deploy-zksync --script deploy.ts --network abstractMainnet",
+    "mint:test": "hardhat deploy-zksync --script mint-test.ts --network abstractTestnet"
+  },
+  "devDependencies": {
+    "@matterlabs/hardhat-zksync": "^1.2.1",
+    "@openzeppelin/contracts": "^5.1.0",
+    "hardhat": "^2.22.0",
+    "typescript": "^5.3.0",
+    "ts-node": "^10.9.0",
+    "@types/node": "^20.0.0",
+    "ethers": "^6.13.0",
+    "zksync-ethers": "^6.15.3",
+    "dotenv": "^16.4.0",
+    "chai": "^4.3.0",
+    "@types/chai": "^4.3.0",
+    "mocha": "^10.2.0",
+    "@types/mocha": "^10.0.0"
+  }
+}
