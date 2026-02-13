@@ -1,186 +1,226 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "./ClawRegistry.sol";
-
-/// @title ClawEvolution - Activity-based art evolution for .claw domains (Phase 2 Scaffold)
-/// @notice Reads agent on-chain activity and updates art parameters accordingly
-/// @dev SCAFFOLD — interfaces and structs defined, core logic TODO
+/// @title ClawEvolution - Activity-based art evolution for .claw domains
+/// @notice Tracks on-chain activity and computes evolution phase (0-4) for visual art
+/// @dev Approved recorders (other contracts or EOAs) call recordActivity to track usage
 contract ClawEvolution {
 
     // ============================================================
     //                     DATA STRUCTURES
     // ============================================================
 
-    /// @notice Categories of on-chain activity that affect art evolution
-    enum ActivityCategory {
-        TRANSFERS,           // ETH/token transfers
-        CONTRACT_INTERACTIONS, // Smart contract calls
-        DEFI,               // DEX swaps, lending, etc.
-        NFT,                // NFT mints, trades
-        GOVERNANCE          // DAO votes, proposals
+    /// @notice Categories of on-chain activity
+    enum ActivityType {
+        TRANSFER,       // 0
+        SKILL_USE,      // 1
+        TOKEN_LAUNCH,   // 2
+        TRADE,          // 3
+        SOCIAL,         // 4
+        GOVERNANCE      // 5
     }
 
-    /// @notice Activity snapshot for a domain
-    struct ActivitySnapshot {
-        uint256 totalTransactions;
-        uint256 transferCount;
-        uint256 contractInteractionCount;
-        uint256 defiCount;
-        uint256 nftCount;
-        uint256 governanceCount;
-        uint256 lastUpdatedBlock;
-        uint256 evolutionStage; // 0 = genesis, 1-5 = evolution stages
-    }
-
-    /// @notice Evolution visual parameters derived from activity
-    struct EvolutionParams {
-        uint8 complexity;      // 0-255: how many extra visual elements
-        uint8 energyLevel;     // 0-255: glow intensity
-        uint8 colorShift;      // 0-255: hue rotation from base
-        uint8 patternDensity;  // 0-255: detail element density
-        uint8 auraSize;        // 0-255: outer glow radius
-        bool hasDefiRing;      // DeFi activity adds orbital ring
-        bool hasNftSparkle;    // NFT activity adds sparkle particles
-        bool hasGovCrown;      // Governance activity adds crown element
+    /// @notice Activity tracking data per token
+    struct ActivityData {
+        uint256 totalActivities;
+        uint256 lastActivityBlock;
+        uint256 lastActivityDay;      // block.timestamp / 86400
+        uint256 streak;               // consecutive days active
+        uint256[6] activityByType;    // count per ActivityType
     }
 
     // ============================================================
     //                          STORAGE
     // ============================================================
 
-    /// @notice Reference to the ClawRegistry
-    ClawRegistry public registry;
+    /// @notice Contract owner
+    address public owner;
 
-    /// @notice Activity snapshots per token
-    mapping(uint256 => ActivitySnapshot) public activities;
+    /// @notice Activity data per token ID
+    mapping(uint256 => ActivityData) public activities;
 
-    /// @notice Evolution parameters per token
-    mapping(uint256 => EvolutionParams) public evolutionParams;
-
-    /// @notice Authorized activity reporters (oracles/indexers)
-    mapping(address => bool) public reporters;
+    /// @notice Approved recorders who can call recordActivity
+    mapping(address => bool) public approvedRecorders;
 
     // ============================================================
     //                          EVENTS
     // ============================================================
 
-    event ArtEvolved(uint256 indexed tokenId, uint256 newStage);
-    event ActivityReported(uint256 indexed tokenId, ActivityCategory category, uint256 count);
-    event ReporterUpdated(address indexed reporter, bool authorized);
+    event ActivityRecorded(uint256 indexed tokenId, ActivityType activityType, uint256 newTotal);
+    event PhaseChanged(uint256 indexed tokenId, uint256 oldPhase, uint256 newPhase);
+    event RecorderAdded(address indexed recorder);
+    event RecorderRemoved(address indexed recorder);
+    event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
+
+    // ============================================================
+    //                        MODIFIERS
+    // ============================================================
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "ClawEvolution: not owner");
+        _;
+    }
+
+    modifier onlyApprovedRecorder() {
+        require(approvedRecorders[msg.sender], "ClawEvolution: not approved recorder");
+        _;
+    }
 
     // ============================================================
     //                       CONSTRUCTOR
     // ============================================================
 
-    constructor(address _registry) {
-        registry = ClawRegistry(_registry);
+    constructor() {
+        owner = msg.sender;
     }
 
     // ============================================================
-    //                    EVOLUTION FUNCTIONS
+    //                   RECORDER MANAGEMENT
     // ============================================================
 
-    /// @notice Update the art for a token based on latest activity data
-    /// @param tokenId The token to evolve
-    /// @dev TODO: Implement activity reading and evolution calculation
-    function updateArt(uint256 tokenId) external {
-        // TODO: Phase 2 Implementation
-        // 1. Read current activity snapshot
-        // 2. Query on-chain activity (or accept from authorized reporter)
-        // 3. Calculate new evolution parameters
-        // 4. Update evolution stage if thresholds met
-        // 5. Emit ArtEvolved event
-
-        revert("ClawEvolution: not yet implemented");
+    /// @notice Add an approved recorder address
+    function addApprovedRecorder(address recorder) external onlyOwner {
+        approvedRecorders[recorder] = true;
+        emit RecorderAdded(recorder);
     }
 
-    /// @notice Report activity for a token (called by authorized reporters/oracles)
+    /// @notice Remove an approved recorder address
+    function removeApprovedRecorder(address recorder) external onlyOwner {
+        approvedRecorders[recorder] = false;
+        emit RecorderRemoved(recorder);
+    }
+
+    /// @notice Transfer ownership
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "ClawEvolution: zero address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+
+    // ============================================================
+    //                   ACTIVITY RECORDING
+    // ============================================================
+
+    /// @notice Record an activity for a token
     /// @param tokenId The token ID
-    /// @param category The activity category
-    /// @param count Number of new activities in this category
-    /// @dev TODO: Implement activity aggregation
-    function reportActivity(
-        uint256 tokenId,
-        ActivityCategory category,
-        uint256 count
-    ) external {
-        // TODO: Phase 2 Implementation
-        // 1. Verify caller is authorized reporter
-        // 2. Update activity snapshot
-        // 3. Check if evolution thresholds are met
-        // 4. If so, trigger art evolution
+    /// @param activityType The type of activity
+    function recordActivity(uint256 tokenId, ActivityType activityType) external onlyApprovedRecorder {
+        ActivityData storage data = activities[tokenId];
 
-        revert("ClawEvolution: not yet implemented");
+        uint256 oldPhase = _calculatePhase(data.totalActivities);
+
+        // Update activity counts
+        data.totalActivities += 1;
+        data.activityByType[uint256(activityType)] += 1;
+
+        // Update streak tracking
+        uint256 currentDay = block.timestamp / 86400;
+        if (data.lastActivityDay == 0) {
+            // First activity ever
+            data.streak = 1;
+        } else if (currentDay == data.lastActivityDay + 1) {
+            // Consecutive day — extend streak
+            data.streak += 1;
+        } else if (currentDay > data.lastActivityDay + 1) {
+            // Streak broken — reset
+            data.streak = 1;
+        }
+        // Same day — no streak change
+
+        data.lastActivityBlock = block.number;
+        data.lastActivityDay = currentDay;
+
+        uint256 newPhase = _calculatePhase(data.totalActivities);
+
+        emit ActivityRecorded(tokenId, activityType, data.totalActivities);
+
+        if (newPhase != oldPhase) {
+            emit PhaseChanged(tokenId, oldPhase, newPhase);
+        }
+    }
+
+    /// @notice Batch record activities (gas efficient for bulk updates)
+    /// @param tokenId The token ID
+    /// @param activityType The type of activity
+    /// @param count Number of activities to record
+    function recordActivities(uint256 tokenId, ActivityType activityType, uint256 count) external onlyApprovedRecorder {
+        require(count > 0 && count <= 100, "ClawEvolution: invalid count");
+
+        ActivityData storage data = activities[tokenId];
+        uint256 oldPhase = _calculatePhase(data.totalActivities);
+
+        data.totalActivities += count;
+        data.activityByType[uint256(activityType)] += count;
+
+        // Update streak
+        uint256 currentDay = block.timestamp / 86400;
+        if (data.lastActivityDay == 0) {
+            data.streak = 1;
+        } else if (currentDay == data.lastActivityDay + 1) {
+            data.streak += 1;
+        } else if (currentDay > data.lastActivityDay + 1) {
+            data.streak = 1;
+        }
+
+        data.lastActivityBlock = block.number;
+        data.lastActivityDay = currentDay;
+
+        uint256 newPhase = _calculatePhase(data.totalActivities);
+
+        emit ActivityRecorded(tokenId, activityType, data.totalActivities);
+
+        if (newPhase != oldPhase) {
+            emit PhaseChanged(tokenId, oldPhase, newPhase);
+        }
     }
 
     // ============================================================
     //                      VIEW FUNCTIONS
     // ============================================================
 
-    /// @notice Get current evolution stage for a token
-    function getEvolutionStage(uint256 tokenId) external view returns (uint256) {
-        return activities[tokenId].evolutionStage;
+    /// @notice Get the evolution phase for a token (0-4)
+    /// @dev Phase 0: Genesis (0), Phase 1: Awakening (1-10), Phase 2: Growth (11-50),
+    ///      Phase 3: Maturity (51-200), Phase 4: Transcendence (201+)
+    function getEvolutionPhase(uint256 tokenId) external view returns (uint256) {
+        return _calculatePhase(activities[tokenId].totalActivities);
     }
 
-    /// @notice Get evolution visual parameters for a token
-    function getEvolutionParams(uint256 tokenId) external view returns (EvolutionParams memory) {
-        return evolutionParams[tokenId];
+    /// @notice Get total activity count for a token
+    function getTotalActivities(uint256 tokenId) external view returns (uint256) {
+        return activities[tokenId].totalActivities;
     }
 
-    /// @notice Get full activity snapshot for a token
-    function getActivity(uint256 tokenId) external view returns (ActivitySnapshot memory) {
-        return activities[tokenId];
+    /// @notice Get activity count for a specific type
+    function getActivityByType(uint256 tokenId, ActivityType activityType) external view returns (uint256) {
+        return activities[tokenId].activityByType[uint256(activityType)];
+    }
+
+    /// @notice Get streak for a token
+    function getStreak(uint256 tokenId) external view returns (uint256) {
+        return activities[tokenId].streak;
+    }
+
+    /// @notice Get full activity data
+    function getActivityData(uint256 tokenId) external view returns (
+        uint256 totalActivities,
+        uint256 lastActivityBlock,
+        uint256 streak,
+        uint256[6] memory activityByType
+    ) {
+        ActivityData storage data = activities[tokenId];
+        return (data.totalActivities, data.lastActivityBlock, data.streak, data.activityByType);
     }
 
     // ============================================================
-    //                  INTERNAL HELPERS (TODO)
+    //                      INTERNAL
     // ============================================================
 
-    /// @dev Calculate evolution parameters from activity data
-    /// TODO: Implement the mapping from activity counts to visual parameters
-    function _calculateEvolution(ActivitySnapshot memory snapshot)
-        internal
-        pure
-        returns (EvolutionParams memory)
-    {
-        // TODO: Phase 2 Implementation
-        // Mapping ideas:
-        // - totalTransactions > 100 → complexity increases
-        // - DeFi count > 10 → adds orbital ring
-        // - NFT count > 5 → adds sparkle particles
-        // - Governance count > 3 → adds crown element
-        // - Each category shifts color palette slightly
-        // - Higher activity = more energy glow
-
-        return EvolutionParams({
-            complexity: 0,
-            energyLevel: 0,
-            colorShift: 0,
-            patternDensity: 0,
-            auraSize: 0,
-            hasDefiRing: false,
-            hasNftSparkle: false,
-            hasGovCrown: false
-        });
-    }
-
-    /// @dev Determine evolution stage from total activity
-    /// TODO: Define thresholds for each stage
-    function _calculateStage(uint256 totalTransactions) internal pure returns (uint256) {
-        // TODO: Phase 2 Implementation
-        // Stage 0: Genesis (0-49 txns)
-        // Stage 1: Awakening (50-199 txns)
-        // Stage 2: Growth (200-499 txns)
-        // Stage 3: Maturity (500-999 txns)
-        // Stage 4: Transcendence (1000-4999 txns)
-        // Stage 5: Legendary (5000+ txns)
-
-        if (totalTransactions < 50) return 0;
-        if (totalTransactions < 200) return 1;
-        if (totalTransactions < 500) return 2;
-        if (totalTransactions < 1000) return 3;
-        if (totalTransactions < 5000) return 4;
-        return 5;
+    /// @dev Calculate evolution phase from total activities
+    function _calculatePhase(uint256 total) internal pure returns (uint256) {
+        if (total == 0) return 0;       // Genesis
+        if (total <= 10) return 1;      // Awakening
+        if (total <= 50) return 2;      // Growth
+        if (total <= 200) return 3;     // Maturity
+        return 4;                       // Transcendence
     }
 }

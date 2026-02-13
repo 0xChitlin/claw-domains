@@ -1,0 +1,17 @@
+{
+  "network": "abstract-testnet",
+  "chainId": 11124,
+  "deployer": "0x00CC14AF7d9ce9Be4fdf9aE858632a00287edE11",
+  "timestamp": "2026-02-13T02:00:18.231Z",
+  "version": "v2-evolution",
+  "contracts": {
+    "ClawRenderer": "0xE80c768bBB3171aE32351e569e13e2Ee05642B93",
+    "ClawRegistry": "0xE230A7ED55a16DAA0A8CF3b703c4572b7E230aE6",
+    "ClawEvolution": "0x8517A68D1092c8fF19D68Cc21cbD967fd7eCe11d"
+  },
+  "previousDeploy": {
+    "ClawRenderer": "0x90f493bfB740F00E6Cf280f4B9A6943d4b96d274",
+    "ClawRegistry": "0x01949e45FabCD684bcD4747966145140aB4778E5",
+    "ClawEvolution": "0xed61D90c46343D0399de04a2CDEd195A217aa583"
+  }
+}

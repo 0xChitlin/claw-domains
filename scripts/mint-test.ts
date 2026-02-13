@@ -1,6 +1,6 @@
 import { Deployer } from "@matterlabs/hardhat-zksync";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { Wallet, Contract } from "zksync-ethers";
+import { Wallet, Contract, Provider } from "zksync-ethers";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -13,23 +13,22 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     throw new Error("PRIVATE_KEY not set in .env");
   }
 
-  // Replace with your deployed contract addresses
-  const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "";
-  if (!REGISTRY_ADDRESS) {
-    throw new Error("Set REGISTRY_ADDRESS in .env to your deployed ClawRegistry address");
-  }
+  const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "0x01949e45FabCD684bcD4747966145140aB4778E5";
 
-  const wallet = new Wallet(privateKey);
+  const provider = new Provider("https://api.testnet.abs.xyz");
+  const wallet = new Wallet(privateKey, provider);
   const deployer = new Deployer(hre, wallet);
 
   const registryArtifact = await deployer.loadArtifact("ClawRegistry");
   const registry = new Contract(REGISTRY_ADDRESS, registryArtifact.abi, wallet);
 
   // Mint a test domain
-  const testName = "mojochitlin";
+  const testName = "clawwallet";
   console.log(`Minting "${testName}.claw"...`);
 
-  const tx = await registry.mint(testName);
+  // Pay mint price (0.0005 ETH)
+  const mintPrice = hre.ethers.parseEther("0.0005");
+  const tx = await registry.mint(testName, { value: mintPrice });
   const receipt = await tx.wait();
   console.log(`✅ Minted in tx: ${receipt.hash}\n`);
 

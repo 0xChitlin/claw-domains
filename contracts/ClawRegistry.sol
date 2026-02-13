@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./ClawRenderer.sol";
+import "./ClawEvolution.sol";
 
 /// @title ClawRegistry - ERC-721 .claw domain name registry with on-chain generative art
 /// @notice Mint unique .claw domain names with living, evolving on-chain SVG art
@@ -18,6 +19,9 @@ contract ClawRegistry is ERC721, Ownable {
 
     /// @notice The on-chain SVG renderer contract
     ClawRenderer public renderer;
+
+    /// @notice The evolution tracking contract
+    ClawEvolution public evolution;
 
     /// @notice Next token ID to mint
     uint256 private _nextTokenId;
@@ -59,6 +63,7 @@ contract ClawRegistry is ERC721, Ownable {
     event DomainMinted(uint256 indexed tokenId, string name, address indexed minter);
     event MetadataUpdated(uint256 indexed tokenId);
     event RendererUpdated(address indexed newRenderer);
+    event EvolutionUpdated(address indexed newEvolution);
     event MintPriceUpdated(uint256 newPrice);
     event TreasuryUpdated(address newTreasury);
 
@@ -120,11 +125,29 @@ contract ClawRegistry is ERC721, Ownable {
     // ============================================================
 
     /// @notice Returns on-chain JSON metadata with embedded SVG art
+    /// @dev If evolution contract is set, queries it for phase and activity count
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
         _requireOwned(tokenId);
 
         if (address(renderer) == address(0)) revert RendererNotSet();
 
+        // If evolution contract is set, use evolution-aware rendering
+        if (address(evolution) != address(0)) {
+            uint256 phase = evolution.getEvolutionPhase(tokenId);
+            uint256 activityCount = evolution.getTotalActivities(tokenId);
+
+            return renderer.renderEvolvedTokenURI(
+                minterAddress[tokenId],
+                tokenId,
+                mintBlock[tokenId],
+                tokenName[tokenId],
+                tokenDescription[tokenId],
+                phase,
+                activityCount
+            );
+        }
+
+        // Fallback: base rendering (phase 0)
         return renderer.renderTokenURI(
             minterAddress[tokenId],
             tokenId,
@@ -167,6 +190,12 @@ contract ClawRegistry is ERC721, Ownable {
     function setRenderer(address _renderer) external onlyOwner {
         renderer = ClawRenderer(_renderer);
         emit RendererUpdated(_renderer);
+    }
+
+    /// @notice Set the evolution contract
+    function setEvolution(address _evolution) external onlyOwner {
+        evolution = ClawEvolution(_evolution);
+        emit EvolutionUpdated(_evolution);
     }
 
     /// @notice Update the mint price
@@ -226,7 +255,6 @@ contract ClawRegistry is ERC721, Ownable {
 
         for (uint256 i = 0; i < nameBytes.length; i++) {
             bytes1 char = nameBytes[i];
-            // a-z (0x61-0x7A), 0-9 (0x30-0x39), hyphen (0x2D)
             bool isLower = (char >= 0x61 && char <= 0x7A);
             bool isDigit = (char >= 0x30 && char <= 0x39);
             bool isHyphen = (char == 0x2D);

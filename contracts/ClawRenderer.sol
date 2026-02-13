@@ -9,7 +9,7 @@ import "./libraries/MathLib.sol";
 
 /// @title ClawRenderer - On-chain generative SVG art engine for .claw domains
 /// @notice Produces deterministic, beautiful generative art from wallet address + tokenId + block number
-/// @dev All art is computed on-chain with no external dependencies
+/// @dev All art is computed on-chain with no external dependencies. Supports evolution phases 0-4.
 contract ClawRenderer {
     using Strings for uint256;
     using ColorLib for ColorLib.HSL;
@@ -17,42 +17,48 @@ contract ClawRenderer {
     // Shape types derived from address bytes
     enum ShapeType { HEXAGONAL, SPIRAL, CRYSTALLINE, ORGANIC }
 
-    /// @notice Generate the full SVG for a .claw domain
-    /// @param wallet The minter's wallet address
-    /// @param tokenId The token ID
-    /// @param mintBlock The block number at mint time
-    /// @param name The domain name (e.g. "mojochitlin")
+    /// @notice Generate the full SVG for a .claw domain (base version, phase 0)
     function renderSVG(
         address wallet,
         uint256 tokenId,
         uint256 mintBlock,
         string memory name
     ) external pure returns (string memory) {
+        return renderEvolvedSVG(wallet, tokenId, mintBlock, name, 0, 0);
+    }
+
+    /// @notice Generate evolution-aware SVG
+    function renderEvolvedSVG(
+        address wallet,
+        uint256 tokenId,
+        uint256 mintBlock,
+        string memory name,
+        uint256 phase,
+        uint256 activityCount
+    ) public pure returns (string memory) {
         bytes20 addr = bytes20(wallet);
-
-        // Derive shape type from first 4 bytes
         ShapeType shapeType = ShapeType(uint8(addr[0]) % 4);
-
-        // Generate color palette
         ColorLib.HSL[5] memory palette = ColorLib.generatePalette(wallet);
 
-        // Build SVG layers
         string memory svg = SVGLib.svgRoot(
             string(abi.encodePacked(
-                _buildDefs(addr, palette, mintBlock),
-                _buildBackground(palette, mintBlock),
+                _buildDefs(addr, palette, mintBlock, phase),
+                _buildBackground(palette, phase),
                 _buildCoreGeometry(addr, palette, shapeType, tokenId),
+                phase >= 2 ? _buildExtraLayers(addr, palette, tokenId, phase) : "",
                 _buildDetailPatterns(addr, palette, tokenId),
-                _buildGlowLayer(palette, addr),
-                _buildBorder(palette),
-                _buildNameLabel(name, palette)
+                _buildGlowLayer(palette, addr, phase),
+                phase >= 4 ? _buildParticles(addr, palette, tokenId) : "",
+                _buildBorder(palette, phase),
+                phase >= 4 ? _buildAnimations(palette) : "",
+                _buildNameLabel(name, palette, phase, activityCount)
             ))
         );
 
         return svg;
     }
 
-    /// @notice Generate complete tokenURI JSON with embedded SVG
+    /// @notice Generate complete tokenURI JSON with embedded SVG (base version)
     function renderTokenURI(
         address wallet,
         uint256 tokenId,
@@ -60,23 +66,23 @@ contract ClawRenderer {
         string memory name,
         string memory description
     ) external pure returns (string memory) {
-        // We call this contract's own renderSVG via internal logic
+        return renderEvolvedTokenURI(wallet, tokenId, mintBlock, name, description, 0, 0);
+    }
+
+    /// @notice Generate evolution-aware tokenURI JSON
+    function renderEvolvedTokenURI(
+        address wallet,
+        uint256 tokenId,
+        uint256 mintBlock,
+        string memory name,
+        string memory description,
+        uint256 phase,
+        uint256 activityCount
+    ) public pure returns (string memory) {
         bytes20 addr = bytes20(wallet);
         ShapeType shapeType = ShapeType(uint8(addr[0]) % 4);
-        ColorLib.HSL[5] memory palette = ColorLib.generatePalette(wallet);
 
-        string memory svg = SVGLib.svgRoot(
-            string(abi.encodePacked(
-                _buildDefs(addr, palette, mintBlock),
-                _buildBackground(palette, mintBlock),
-                _buildCoreGeometry(addr, palette, shapeType, tokenId),
-                _buildDetailPatterns(addr, palette, tokenId),
-                _buildGlowLayer(palette, addr),
-                _buildBorder(palette),
-                _buildNameLabel(name, palette)
-            ))
-        );
-
+        string memory svg = renderEvolvedSVG(wallet, tokenId, mintBlock, name, phase, activityCount);
         string memory imageURI = SVGLib.svgToDataURI(svg);
 
         string memory shapeStr;
@@ -85,6 +91,15 @@ contract ClawRenderer {
         else if (shapeType == ShapeType.CRYSTALLINE) shapeStr = "Crystalline";
         else shapeStr = "Organic";
 
+        string memory phaseStr;
+        if (phase == 0) phaseStr = "Genesis";
+        else if (phase == 1) phaseStr = "Awakening";
+        else if (phase == 2) phaseStr = "Growth";
+        else if (phase == 3) phaseStr = "Maturity";
+        else phaseStr = "Transcendence";
+
+        ColorLib.HSL[5] memory palette = ColorLib.generatePalette(wallet);
+
         string memory json = string(abi.encodePacked(
             '{"name":"', name, '.claw",',
             '"description":"', bytes(description).length > 0 ? description : "A living .claw agent identity", '",',
@@ -92,6 +107,8 @@ contract ClawRenderer {
             '"attributes":[',
             '{"trait_type":"Shape","value":"', shapeStr, '"},',
             '{"trait_type":"Hue","value":"', palette[0].h.toString(), '"},',
+            '{"trait_type":"Phase","value":"', phaseStr, '"},',
+            '{"trait_type":"Activities","value":', activityCount.toString(), '},',
             '{"trait_type":"Domain","value":"', name, '.claw"}',
             ']}'
         ));
@@ -103,33 +120,53 @@ contract ClawRenderer {
     //                    INTERNAL LAYER BUILDERS
     // ============================================================
 
-    /// @dev Build SVG <defs> — filters, gradients, clip paths
+    /// @dev Build SVG <defs>
     function _buildDefs(
         bytes20 addr,
         ColorLib.HSL[5] memory palette,
-        uint256 mintBlock
+        uint256 mintBlock,
+        uint256 phase
     ) internal pure returns (string memory) {
         uint256 turbSeed = uint8(addr[3]) * 256 + uint8(addr[4]);
-        // Organic distortion filter
+
+        string memory turbFreq = phase >= 3 ? "0.025" : "0.015";
+        uint256 turbOctaves = phase >= 3 ? 5 : 3;
+        uint256 dispScale = phase >= 3 ? 14 : 8;
+
         string memory organicFilter = SVGLib.filter("organic",
             string(abi.encodePacked(
-                SVGLib.feTurbulence("fractalNoise", "0.015", 3, turbSeed),
-                SVGLib.feDisplacementMap(8)
+                SVGLib.feTurbulence("fractalNoise", turbFreq, turbOctaves, turbSeed),
+                SVGLib.feDisplacementMap(dispScale)
             ))
         );
 
-        // Glow filter
+        string memory glowBlur = phase == 0 ? "6" : (phase == 1 ? "10" : (phase == 2 ? "14" : (phase == 3 ? "18" : "24")));
         string memory glowFilter = SVGLib.filter("glow",
-            SVGLib.feGaussianBlur("6", "blur")
+            SVGLib.feGaussianBlur(glowBlur, "blur")
         );
 
-        // Soft blur filter
         string memory softFilter = SVGLib.filter("soft",
             SVGLib.feGaussianBlur("3", "blur")
         );
 
-        // Background gradient
-        uint256 angle = mintBlock % 360;
+        string memory auraFilter = "";
+        if (phase >= 1) {
+            string memory auraBlur = phase == 1 ? "12" : (phase == 2 ? "20" : (phase == 3 ? "28" : "35"));
+            auraFilter = SVGLib.filter("aura",
+                SVGLib.feGaussianBlur(auraBlur, "blur")
+            );
+        }
+
+        string memory complexFilter = "";
+        if (phase >= 3) {
+            complexFilter = SVGLib.filter("complex",
+                string(abi.encodePacked(
+                    SVGLib.feTurbulence("turbulence", "0.04", 6, turbSeed + 42),
+                    SVGLib.feDisplacementMap(20)
+                ))
+            );
+        }
+
         string memory bgGrad = SVGLib.linearGradient(
             "bgGrad",
             "0%", "0%", "100%", "100%",
@@ -140,17 +177,16 @@ contract ClawRenderer {
             ))
         );
 
-        // Radial glow gradient
+        string memory innerOpacity = phase <= 1 ? "0.4" : (phase == 2 ? "0.5" : (phase == 3 ? "0.6" : "0.8"));
         string memory glowGrad = SVGLib.radialGradient(
             "glowGrad", 200, 200, 180,
             string(abi.encodePacked(
-                SVGLib.stop(0, ColorLib.toHSLString(ColorLib.lighten(palette[0], 15)), "0.4"),
+                SVGLib.stop(0, ColorLib.toHSLString(ColorLib.lighten(palette[0], 15)), innerOpacity),
                 SVGLib.stop(40, ColorLib.toHSLString(palette[1]), "0.2"),
                 SVGLib.stop(100, ColorLib.toHSLString(ColorLib.darken(palette[2], 15)), "0")
             ))
         );
 
-        // Core shape gradient
         string memory coreGrad = SVGLib.radialGradient(
             "coreGrad", 200, 200, 120,
             string(abi.encodePacked(
@@ -160,25 +196,51 @@ contract ClawRenderer {
             ))
         );
 
+        string memory pulseGrad = "";
+        if (phase >= 4) {
+            pulseGrad = SVGLib.radialGradient(
+                "pulseGrad", 200, 200, 150,
+                string(abi.encodePacked(
+                    SVGLib.stop(0, ColorLib.toHSLString(ColorLib.lighten(palette[3], 20)), "0.7"),
+                    SVGLib.stop(50, ColorLib.toHSLString(ColorLib.lighten(palette[0], 15)), "0.3"),
+                    SVGLib.stop(100, ColorLib.toHSLString(palette[2]), "0")
+                ))
+            );
+        }
+
         return SVGLib.defs(string(abi.encodePacked(
-            organicFilter, glowFilter, softFilter, bgGrad, glowGrad, coreGrad
+            organicFilter, glowFilter, softFilter, auraFilter, complexFilter,
+            bgGrad, glowGrad, coreGrad, pulseGrad
         )));
     }
 
-    /// @dev Layer 1: Background gradient
+    /// @dev Background
     function _buildBackground(
         ColorLib.HSL[5] memory palette,
-        uint256 mintBlock
+        uint256 phase
     ) internal pure returns (string memory) {
-        return string(abi.encodePacked(
+        string memory bg = string(abi.encodePacked(
             SVGLib.rect(0, 0, 400, 400, "url(#bgGrad)", ""),
-            // Subtle noise overlay
             SVGLib.rect(0, 0, 400, 400, ColorLib.toHSLString(ColorLib.darken(palette[0], 30)),
                 'filter="url(#organic)" opacity="0.3"')
         ));
+
+        if (phase >= 3) {
+            bg = string(abi.encodePacked(
+                bg,
+                SVGLib.circle(100, 100, 200,
+                    ColorLib.toHSLString(ColorLib.lighten(palette[3], 10)),
+                    'opacity="0.08" filter="url(#glow)"'),
+                SVGLib.circle(300, 300, 180,
+                    ColorLib.toHSLString(ColorLib.lighten(palette[4], 10)),
+                    'opacity="0.06" filter="url(#glow)"')
+            ));
+        }
+
+        return bg;
     }
 
-    /// @dev Layer 2: Core geometry — the "seed crystal"
+    /// @dev Core geometry
     function _buildCoreGeometry(
         bytes20 addr,
         ColorLib.HSL[5] memory palette,
@@ -186,24 +248,76 @@ contract ClawRenderer {
         uint256 tokenId
     ) internal pure returns (string memory) {
         if (shapeType == ShapeType.HEXAGONAL) {
-            return _buildHexagonal(addr, palette, tokenId);
+            return _buildHexagonal(addr, palette);
         } else if (shapeType == ShapeType.SPIRAL) {
-            return _buildSpiral(addr, palette, tokenId);
+            return _buildSpiral(addr, palette);
         } else if (shapeType == ShapeType.CRYSTALLINE) {
-            return _buildCrystalline(addr, palette, tokenId);
+            return _buildCrystalline(addr, palette);
         } else {
-            return _buildOrganic(addr, palette, tokenId);
+            return _buildOrganic(addr, palette);
         }
     }
 
-    /// @dev Hexagonal geometry — nested hexagons with rotation
-    function _buildHexagonal(
+    /// @dev Phase 2+ extra shape layers
+    function _buildExtraLayers(
         bytes20 addr,
         ColorLib.HSL[5] memory palette,
-        uint256 tokenId
+        uint256 tokenId,
+        uint256 phase
+    ) internal pure returns (string memory) {
+        string memory layers = "";
+        uint256 numExtra = phase >= 4 ? 4 : (phase >= 3 ? 3 : 2);
+
+        for (uint256 i = 0; i < numExtra; i++) {
+            uint256 seed = uint256(keccak256(abi.encodePacked(addr, tokenId, "extra", i)));
+            uint256 rotation = (seed % 360);
+            uint256 radius = 60 + (seed >> 8) % 80;
+            uint256 cx = 130 + (seed >> 16) % 140;
+            uint256 cy = 130 + (seed >> 24) % 140;
+            uint256 colorIdx = (seed >> 32) % 5;
+
+            string memory opacity = phase >= 3 ? "0.25" : "0.18";
+            string memory filterAttr = phase >= 3 ? ' filter="url(#complex)"' : ' filter="url(#soft)"';
+
+            string memory points = _hexPoints(cx, cy, radius, rotation);
+            layers = string(abi.encodePacked(
+                layers,
+                '<polygon points="', points,
+                '" fill="', ColorLib.toHSLString(ColorLib.lighten(palette[colorIdx], 10)),
+                '" opacity="', opacity,
+                '" stroke="', ColorLib.toHSLString(ColorLib.lighten(palette[colorIdx], 25)),
+                '" stroke-width="0.5"', filterAttr, '/>'
+            ));
+        }
+
+        if (phase >= 3) {
+            layers = string(abi.encodePacked(
+                layers,
+                SVGLib.circle(200, 200, 130, "none",
+                    string(abi.encodePacked(
+                        'stroke="', ColorLib.toHSLString(ColorLib.lighten(palette[2], 20)),
+                        '" stroke-width="1" opacity="0.3"'
+                    ))
+                ),
+                SVGLib.circle(200, 200, 155, "none",
+                    string(abi.encodePacked(
+                        'stroke="', ColorLib.toHSLString(ColorLib.lighten(palette[3], 15)),
+                        '" stroke-width="0.5" opacity="0.2"'
+                    ))
+                )
+            ));
+        }
+
+        return SVGLib.group("", layers);
+    }
+
+    /// @dev Hexagonal
+    function _buildHexagonal(
+        bytes20 addr,
+        ColorLib.HSL[5] memory palette
     ) internal pure returns (string memory) {
         string memory shapes = "";
-        uint256 layers = 3 + (uint8(addr[5]) % 3); // 3-5 layers
+        uint256 layers = 3 + (uint8(addr[5]) % 3);
         uint256 baseRotation = uint8(addr[6]) % 60;
 
         for (uint256 i = 0; i < layers; i++) {
@@ -211,9 +325,7 @@ contract ClawRenderer {
             uint256 rotation = baseRotation + (i * 30);
             uint256 colorIdx = i % 5;
 
-            // Build hexagon points
             string memory points = _hexPoints(200, 200, radius, rotation);
-
             string memory opacity = i == 0 ? "0.4" : (i == 1 ? "0.5" : "0.6");
 
             shapes = string(abi.encodePacked(
@@ -226,7 +338,6 @@ contract ClawRenderer {
             ));
         }
 
-        // Central circle
         shapes = string(abi.encodePacked(
             shapes,
             SVGLib.circle(200, 200, 20, "url(#coreGrad)", 'filter="url(#glow)"')
@@ -235,18 +346,17 @@ contract ClawRenderer {
         return SVGLib.group("", shapes);
     }
 
-    /// @dev Spiral geometry — Fibonacci-like spiral of circles
+    /// @dev Spiral
     function _buildSpiral(
         bytes20 addr,
-        ColorLib.HSL[5] memory palette,
-        uint256 tokenId
+        ColorLib.HSL[5] memory palette
     ) internal pure returns (string memory) {
         string memory shapes = "";
-        uint256 numDots = 12 + (uint8(addr[5]) % 12); // 12-23 dots
-        uint256 spiralTight = 5 + (uint8(addr[6]) % 4); // tightness
+        uint256 numDots = 12 + (uint8(addr[5]) % 12);
+        uint256 spiralTight = 5 + (uint8(addr[6]) % 4);
 
         for (uint256 i = 0; i < numDots; i++) {
-            uint256 angle = (i * 137) % 360; // golden angle approximation
+            uint256 angle = (i * 137) % 360;
             uint256 dist = 20 + (i * spiralTight);
             if (dist > 160) dist = 160;
 
@@ -269,7 +379,6 @@ contract ClawRenderer {
             ));
         }
 
-        // Central glow
         shapes = string(abi.encodePacked(
             shapes,
             SVGLib.circle(200, 200, 30, "url(#coreGrad)", 'filter="url(#glow)" opacity="0.8"')
@@ -278,11 +387,10 @@ contract ClawRenderer {
         return SVGLib.group("", shapes);
     }
 
-    /// @dev Crystalline geometry — angular faceted shapes
+    /// @dev Crystalline
     function _buildCrystalline(
         bytes20 addr,
-        ColorLib.HSL[5] memory palette,
-        uint256 tokenId
+        ColorLib.HSL[5] memory palette
     ) internal pure returns (string memory) {
         string memory shapes = "";
         uint256 numFacets = 4 + (uint8(addr[5]) % 4);
@@ -293,7 +401,6 @@ contract ClawRenderer {
             uint256 len = 80 + (uint8(addr[7 + (i % 6)]) % 60);
             uint256 colorIdx = i % 5;
 
-            // Triangle from center to two outer points
             uint256 x1 = MathLib.circleX(200, len, angle);
             uint256 y1 = MathLib.circleY(200, len, angle);
             uint256 x2 = MathLib.circleX(200, len - 20, (angle + 15) % 360);
@@ -318,7 +425,6 @@ contract ClawRenderer {
             ));
         }
 
-        // Inner diamond
         shapes = string(abi.encodePacked(
             shapes,
             SVGLib.polygon(
@@ -331,11 +437,10 @@ contract ClawRenderer {
         return SVGLib.group("", shapes);
     }
 
-    /// @dev Organic geometry — flowing curves and blobs
+    /// @dev Organic
     function _buildOrganic(
         bytes20 addr,
-        ColorLib.HSL[5] memory palette,
-        uint256 tokenId
+        ColorLib.HSL[5] memory palette
     ) internal pure returns (string memory) {
         string memory shapes = "";
         uint256 numBlobs = 3 + (uint8(addr[5]) % 3);
@@ -359,7 +464,6 @@ contract ClawRenderer {
             ));
         }
 
-        // Organic center blob
         shapes = string(abi.encodePacked(
             shapes,
             '<ellipse cx="200" cy="200" rx="50" ry="45" fill="url(#coreGrad)" filter="url(#organic)" opacity="0.7"/>'
@@ -368,14 +472,14 @@ contract ClawRenderer {
         return SVGLib.group("", shapes);
     }
 
-    /// @dev Layer 3: Detail patterns — small repeating elements
+    /// @dev Detail patterns
     function _buildDetailPatterns(
         bytes20 addr,
         ColorLib.HSL[5] memory palette,
         uint256 tokenId
     ) internal pure returns (string memory) {
         string memory shapes = "";
-        uint256 numDetails = 6 + (uint8(addr[15]) % 8); // 6-13 detail elements
+        uint256 numDetails = 6 + (uint8(addr[15]) % 8);
 
         for (uint256 i = 0; i < numDetails; i++) {
             uint256 seed = uint256(keccak256(abi.encodePacked(addr, tokenId, i)));
@@ -385,7 +489,6 @@ contract ClawRenderer {
             uint256 size = 2 + ((seed >> 16) % 6);
             uint256 colorIdx = (seed >> 24) % 5;
 
-            // Alternate between tiny circles and diamonds
             if (i % 3 == 0) {
                 shapes = string(abi.encodePacked(
                     shapes,
@@ -394,7 +497,6 @@ contract ClawRenderer {
                         'opacity="0.6"')
                 ));
             } else if (i % 3 == 1) {
-                // Tiny diamond
                 string memory points = string(abi.encodePacked(
                     x.toString(), ",", (y > size ? y - size : 0).toString(), " ",
                     (x + size).toString(), ",", y.toString(), " ",
@@ -408,7 +510,6 @@ contract ClawRenderer {
                         'opacity="0.5"')
                 ));
             } else {
-                // Tiny ring
                 shapes = string(abi.encodePacked(
                     shapes,
                     SVGLib.circle(x, y, size,
@@ -425,15 +526,14 @@ contract ClawRenderer {
         return SVGLib.group("", shapes);
     }
 
-    /// @dev Layer 4: Glow / energy effect
+    /// @dev Glow layer — scales with phase
     function _buildGlowLayer(
         ColorLib.HSL[5] memory palette,
-        bytes20 addr
+        bytes20 addr,
+        uint256 phase
     ) internal pure returns (string memory) {
-        // Central radial glow
         string memory glow = SVGLib.circle(200, 200, 160, "url(#glowGrad)", "");
 
-        // Secondary glow offset based on address
         uint256 gx = 150 + (uint8(addr[16]) % 100);
         uint256 gy = 150 + (uint8(addr[17]) % 100);
 
@@ -444,36 +544,139 @@ contract ClawRenderer {
                 'opacity="0.15" filter="url(#glow)"')
         ));
 
+        if (phase >= 1) {
+            string memory auraOpacity = phase == 1 ? "0.15" : (phase == 2 ? "0.2" : (phase == 3 ? "0.3" : "0.4"));
+            uint256 auraRadius = 80 + (phase * 20);
+            glow = string(abi.encodePacked(
+                glow,
+                SVGLib.circle(200, 200, auraRadius,
+                    ColorLib.toHSLString(ColorLib.lighten(palette[0], 20)),
+                    string(abi.encodePacked('opacity="', auraOpacity, '" filter="url(#aura)"'))
+                )
+            ));
+        }
+
+        if (phase >= 4) {
+            glow = string(abi.encodePacked(
+                glow,
+                SVGLib.circle(200, 200, 170, "url(#pulseGrad)", 'opacity="0.3" filter="url(#glow)"')
+            ));
+        }
+
         return glow;
     }
 
-    /// @dev Layer 5: Border / frame
-    function _buildBorder(
-        ColorLib.HSL[5] memory palette
+    /// @dev Phase 4: Particle dots
+    function _buildParticles(
+        bytes20 addr,
+        ColorLib.HSL[5] memory palette,
+        uint256 tokenId
     ) internal pure returns (string memory) {
-        return string(abi.encodePacked(
-            // Outer frame
+        string memory particles = "";
+        uint256 numParticles = 12;
+
+        for (uint256 i = 0; i < numParticles; i++) {
+            uint256 seed = uint256(keccak256(abi.encodePacked(addr, tokenId, "particle", i)));
+            uint256 angle = (i * 30) + (seed % 15);
+            uint256 dist = 100 + (seed >> 8) % 70;
+            uint256 px = MathLib.circleX(200, dist, angle);
+            uint256 py = MathLib.circleY(200, dist, angle);
+            uint256 colorIdx = i % 5;
+            uint256 pSize = 2 + (seed >> 16) % 4;
+
+            particles = string(abi.encodePacked(
+                particles,
+                SVGLib.circle(px, py, pSize,
+                    ColorLib.toHSLString(ColorLib.lighten(palette[colorIdx], 30)),
+                    'opacity="0.8" filter="url(#glow)"'
+                )
+            ));
+        }
+
+        return SVGLib.group("", particles);
+    }
+
+    /// @dev Border — evolves with phase
+    function _buildBorder(
+        ColorLib.HSL[5] memory palette,
+        uint256 phase
+    ) internal pure returns (string memory) {
+        string memory borderOpacity = phase >= 3 ? "0.7" : "0.5";
+        string memory borderWidth = phase >= 4 ? "2.5" : "1.5";
+
+        string memory border = string(abi.encodePacked(
             '<rect x="4" y="4" width="392" height="392" rx="12" ry="12" fill="none" stroke="',
             ColorLib.toHSLString(ColorLib.lighten(palette[4], 10)),
-            '" stroke-width="1.5" opacity="0.5"/>',
-            // Inner subtle frame
+            '" stroke-width="', borderWidth, '" opacity="', borderOpacity, '"/>',
             '<rect x="12" y="12" width="376" height="376" rx="8" ry="8" fill="none" stroke="',
             ColorLib.toHSLString(ColorLib.lighten(palette[4], 15)),
             '" stroke-width="0.5" opacity="0.3"/>'
         ));
+
+        if (phase >= 4) {
+            border = string(abi.encodePacked(
+                border,
+                '<rect x="2" y="2" width="396" height="396" rx="14" ry="14" fill="none" stroke="',
+                ColorLib.toHSLString(ColorLib.lighten(palette[0], 25)),
+                '" stroke-width="1" opacity="0.5" filter="url(#glow)"/>'
+            ));
+        }
+
+        return border;
     }
 
-    /// @dev Name label at the bottom
-    function _buildNameLabel(
-        string memory name,
+    /// @dev Phase 4: Animations
+    function _buildAnimations(
         ColorLib.HSL[5] memory palette
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(
-            // Background pill for text
+            '<circle cx="200" cy="200" r="90" fill="none" stroke="',
+            ColorLib.toHSLString(ColorLib.lighten(palette[1], 20)),
+            '" stroke-width="0.8" opacity="0.4" stroke-dasharray="8 12">',
+            '<animateTransform attributeName="transform" type="rotate" from="0 200 200" to="360 200 200" dur="30s" repeatCount="indefinite"/>',
+            '</circle>',
+            '<circle cx="200" cy="200" r="40" fill="',
+            ColorLib.toHSLString(ColorLib.lighten(palette[0], 25)),
+            '" opacity="0.15" filter="url(#glow)">',
+            '<animate attributeName="r" values="35;50;35" dur="4s" repeatCount="indefinite"/>',
+            '<animate attributeName="opacity" values="0.1;0.25;0.1" dur="4s" repeatCount="indefinite"/>',
+            '</circle>',
+            '<circle cx="200" cy="200" r="160" fill="none" stroke="',
+            ColorLib.toHSLString(ColorLib.lighten(palette[3], 15)),
+            '" stroke-width="0.5" opacity="0.3" stroke-dasharray="4 20">',
+            '<animateTransform attributeName="transform" type="rotate" from="360 200 200" to="0 200 200" dur="45s" repeatCount="indefinite"/>',
+            '</circle>'
+        ));
+    }
+
+    /// @dev Name label with phase dots
+    function _buildNameLabel(
+        string memory name,
+        ColorLib.HSL[5] memory palette,
+        uint256 phase,
+        uint256 activityCount
+    ) internal pure returns (string memory) {
+        string memory phaseDots = "";
+        for (uint256 i = 0; i < 5; i++) {
+            string memory dotFill;
+            if (i <= phase) {
+                dotFill = ColorLib.toHSLString(ColorLib.lighten(palette[0], 25));
+            } else {
+                dotFill = ColorLib.toHSLString(ColorLib.darken(palette[4], 15));
+            }
+            uint256 dotX = 175 + (i * 12);
+            phaseDots = string(abi.encodePacked(
+                phaseDots,
+                SVGLib.circle(dotX, 358, 3, dotFill,
+                    i <= phase ? 'opacity="0.9"' : 'opacity="0.3"')
+            ));
+        }
+
+        return string(abi.encodePacked(
+            phaseDots,
             '<rect x="120" y="365" width="160" height="24" rx="12" fill="',
             ColorLib.toHSLString(ColorLib.darken(palette[0], 25)),
             '" opacity="0.7"/>',
-            // Domain name text
             SVGLib.text(200, 382, string(abi.encodePacked(name, ".claw")),
                 string(abi.encodePacked(
                     'fill="', ColorLib.toHSLString(ColorLib.lighten(palette[4], 25)),
@@ -487,7 +690,6 @@ contract ClawRenderer {
     //                       GEOMETRY HELPERS
     // ============================================================
 
-    /// @dev Generate hexagon vertex points string
     function _hexPoints(uint256 cx, uint256 cy, uint256 radius, uint256 startAngle)
         internal pure returns (string memory)
     {
