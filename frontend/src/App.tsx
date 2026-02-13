@@ -4,9 +4,9 @@ import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './config/wagmi';
 import { Header } from './components/Header';
-import { Hero } from './components/Hero';
+import { HeroSection } from './components/HeroSection';
 import { StatsBar } from './components/StatsBar';
-import { MintSection } from './components/MintSection';
+import { Gallery } from './components/Gallery';
 import { NameRules } from './components/NameRules';
 import { Footer } from './components/Footer';
 
@@ -20,21 +20,28 @@ export default function App() {
           theme={darkTheme({
             accentColor: '#9b4dca',
             accentColorForeground: 'white',
-            borderRadius: 'large',
-            fontStack: 'system',
+            borderRadius: 'medium',
             overlayBlur: 'small',
           })}
         >
           <div className="min-h-screen bg-claw-bg">
             <Header />
-            <main>
-              <Hero />
-              <div className="max-w-2xl mx-auto px-4 -mt-6 relative z-20">
-                <StatsBar />
-              </div>
-              <MintSection />
-              <NameRules />
-            </main>
+            {/* Spacer for fixed header */}
+            <div className="h-16" />
+            <StatsBar />
+            <HeroSection />
+
+            <div className="max-w-6xl mx-auto px-4">
+              <div className="border-t border-claw-border" />
+            </div>
+
+            <Gallery />
+
+            <div className="max-w-6xl mx-auto px-4">
+              <div className="border-t border-claw-border" />
+            </div>
+
+            <NameRules />
             <Footer />
           </div>
         </RainbowKitProvider>

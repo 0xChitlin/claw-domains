@@ -55,7 +55,7 @@ export function NameChecker({ onNameValid }: NameCheckerProps) {
           onChange={handleChange}
           placeholder="Search for a name..."
           maxLength={32}
-          className="input-dark w-full text-lg pr-32 font-mono"
+          className="w-full h-14 pl-5 pr-32 rounded-xl bg-claw-card border border-claw-border text-white text-lg font-mono placeholder:text-gray-600 focus:outline-none focus:border-claw-purple/50 focus:ring-1 focus:ring-claw-purple/30 transition-all"
           autoComplete="off"
           spellCheck={false}
         />

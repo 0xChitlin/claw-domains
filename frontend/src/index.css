@@ -25,12 +25,10 @@
   color: white;
 }
 
-/* Smooth SVG rendering */
 svg {
   shape-rendering: geometricPrecision;
 }
 
-/* Remove number input spinners */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;

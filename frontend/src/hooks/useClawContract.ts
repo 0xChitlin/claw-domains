@@ -39,7 +39,7 @@ export function useTokenURI(tokenId: bigint | undefined) {
     functionName: 'tokenURI',
     args: tokenId !== undefined ? [tokenId] : undefined,
     query: {
-      enabled: tokenId !== undefined,
+      enabled: tokenId !== undefined && tokenId > 0n,
     },
   });
 }
