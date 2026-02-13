@@ -1,0 +1,14 @@
+{
+  "network": "abstract-testnet",
+  "chainId": 11124,
+  "deployer": "0x00CC14AF7d9ce9Be4fdf9aE858632a00287edE11",
+  "timestamp": "2026-02-13T02:29:54.664Z",
+  "version": "v3-punk-renderer",
+  "contracts": {
+    "ClawRenderer": "0xC1F9D556BAAfEc94D8425874246C80Fec63E4eD7",
+    "ClawRegistry": "0x01949e45FabCD684bcD4747966145140aB4778E5"
+  },
+  "previousDeploy": {
+    "ClawRenderer": "0xE80c768bBB3171aE32351e569e13e2Ee05642B93"
+  }
+}

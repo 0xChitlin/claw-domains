@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-02-13T02:07:30.881Z",
+  "network": "abstract-testnet",
+  "registry": "0x01949e45FabCD684bcD4747966145140aB4778E5",
+  "wallet": "0x00CC14AF7d9ce9Be4fdf9aE858632a00287edE11",
+  "mintPrice": "0.0005 ETH",
+  "finalBalance": "0.010405472352362624 ETH",
+  "results": {
+    "minted": [
+      {
+        "name": "openclaw",
+        "tokenId": "3",
+        "txHash": "0x8837e3f7b3e0aa178b872caafcf091908c1f8ccb341a653d683ca6e840d7747c"
+      },
+      {
+        "name": "abstract",
+        "tokenId": "4",
+        "txHash": "0x96ad4266e27e5d28d9a4ed6b8129eddbf9561bab57961161f1df8ac3ea70c3c2"
+      },
+      {
+        "name": "clawpinch",
+        "tokenId": "5",
+        "txHash": "0x59f43e429b2d925804f3204594a44fb9fcbfd1e620d50562a53f7bfa8c1a5552"
+      },
+      {
+        "name": "chitlin",
+        "tokenId": "6",
+        "txHash": "0x0da2dd50a3bb93debd7f2914456583eaa01d4511b0fdc20817486af6e898ecd0"
+      },
+      {
+        "name": "0xchitlin",
+        "tokenId": "7",
+        "txHash": "0x852daa3f6e6cce4f241d8bf35118b1e33761fd61a8c307504254279c9fca9078"
+      },
+      {
+        "name": "mikeebuilds",
+        "tokenId": "8",
+        "txHash": "0x42799f536c8ea961b1a1782825a6130850e5a6657f418a070bee6359c78078db"
+      },
+      {
+        "name": "agent",
+        "tokenId": "9",
+        "txHash": "0x9386a04ce00d7ab7c0833aceeb33f542e44974ded8160695fcfe54d5b28ed545"
+      },
+      {
+        "name": "wallet",
+        "tokenId": "10",
+        "txHash": "0x25862448d311d76562b6557fc2a138b4d58a3580c3736402071fcaa86cd07515"
+      },
+      {
+        "name": "defi",
+        "tokenId": "11",
+        "txHash": "0x57519863929358b09a16b3a2425a86f580906a69a366d3c32a1d4a62f7d89178"
+      }
+    ],
+    "failed": [],
+    "skipped": []
+  }
+}
