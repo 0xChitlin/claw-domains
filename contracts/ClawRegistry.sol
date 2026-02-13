@@ -46,6 +46,12 @@ contract ClawRegistry is ERC721, Ownable {
     /// @notice Optional metadata: social links (JSON string)
     mapping(uint256 => string) public tokenSocials;
 
+    /// @notice Mint price in wei (default ~$1 at launch)
+    uint256 public mintPrice;
+
+    /// @notice Treasury address for mint proceeds
+    address public treasury;
+
     // ============================================================
     //                          EVENTS
     // ============================================================
@@ -53,6 +59,8 @@ contract ClawRegistry is ERC721, Ownable {
     event DomainMinted(uint256 indexed tokenId, string name, address indexed minter);
     event MetadataUpdated(uint256 indexed tokenId);
     event RendererUpdated(address indexed newRenderer);
+    event MintPriceUpdated(uint256 newPrice);
+    event TreasuryUpdated(address newTreasury);
 
     // ============================================================
     //                          ERRORS
@@ -64,13 +72,17 @@ contract ClawRegistry is ERC721, Ownable {
     error InvalidCharacter();
     error NotTokenOwner();
     error RendererNotSet();
+    error InsufficientPayment();
+    error WithdrawFailed();
 
     // ============================================================
     //                       CONSTRUCTOR
     // ============================================================
 
-    constructor(address _renderer) ERC721("Claw Domains", "CLAW") Ownable(msg.sender) {
+    constructor(address _renderer, uint256 _mintPrice, address _treasury) ERC721("Claw Domains", "CLAW") Ownable(msg.sender) {
         renderer = ClawRenderer(_renderer);
+        mintPrice = _mintPrice;
+        treasury = _treasury;
         _nextTokenId = 1; // Start at 1, 0 means "not found"
     }
 
@@ -80,7 +92,8 @@ contract ClawRegistry is ERC721, Ownable {
 
     /// @notice Mint a new .claw domain
     /// @param name The domain name (without .claw suffix). Must be lowercase alphanumeric, 3-32 chars.
-    function mint(string calldata name) external returns (uint256) {
+    function mint(string calldata name) external payable returns (uint256) {
+        if (msg.value < mintPrice) revert InsufficientPayment();
         _validateName(name);
 
         if (nameExists[name]) revert NameAlreadyTaken();
@@ -154,6 +167,25 @@ contract ClawRegistry is ERC721, Ownable {
     function setRenderer(address _renderer) external onlyOwner {
         renderer = ClawRenderer(_renderer);
         emit RendererUpdated(_renderer);
+    }
+
+    /// @notice Update the mint price
+    function setMintPrice(uint256 _mintPrice) external onlyOwner {
+        mintPrice = _mintPrice;
+        emit MintPriceUpdated(_mintPrice);
+    }
+
+    /// @notice Update the treasury address
+    function setTreasury(address _treasury) external onlyOwner {
+        treasury = _treasury;
+        emit TreasuryUpdated(_treasury);
+    }
+
+    /// @notice Withdraw all mint proceeds to treasury
+    function withdraw() external onlyOwner {
+        uint256 balance = address(this).balance;
+        (bool success, ) = treasury.call{value: balance}("");
+        if (!success) revert WithdrawFailed();
     }
 
     // ============================================================

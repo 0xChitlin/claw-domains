@@ -24,9 +24,14 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   console.log(`   ✅ ClawRenderer deployed to: ${rendererAddress}\n`);
 
   // 2. Deploy ClawRegistry (the NFT + name registry)
+  // Mint price: 0.0005 ETH (~$1 at $2000/ETH)
+  const mintPrice = "500000000000000"; // 0.0005 ETH in wei
+  const treasury = wallet.address; // Mint proceeds go to deployer
   console.log("📋 Deploying ClawRegistry...");
+  console.log(`   Mint price: 0.0005 ETH (~$1)`);
+  console.log(`   Treasury: ${treasury}`);
   const registryArtifact = await deployer.loadArtifact("ClawRegistry");
-  const registry = await deployer.deploy(registryArtifact, [rendererAddress]);
+  const registry = await deployer.deploy(registryArtifact, [rendererAddress, mintPrice, treasury]);
   const registryAddress = await registry.getAddress();
   console.log(`   ✅ ClawRegistry deployed to: ${registryAddress}\n`);
 

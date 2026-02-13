@@ -2,11 +2,14 @@
   "network": "abstract-testnet",
   "chainId": 11124,
   "deployer": "0x00CC14AF7d9ce9Be4fdf9aE858632a00287edE11",
-  "timestamp": "2026-02-13T01:06:00.000Z",
+  "timestamp": "2026-02-13T01:38:00.000Z",
+  "version": 2,
+  "mintPrice": "0.0005 ETH (~$1)",
+  "treasury": "0x00CC14AF7d9ce9Be4fdf9aE858632a00287edE11",
   "contracts": {
-    "ClawRenderer": "0x90f493bfB740F00E6Cf280f4B9A6943d4b96d274",
-    "ClawRegistry": "0x8e80a0543e7BA682Fe6b9442D95ff211D33107fb",
-    "ClawEvolution": "0x7BBBBbDaCE3EA19Fe317e620CbD89F1040F2ddAf",
-    "ClawReputation": "0x89B974f20039b91CE5860759Ac9fdA3C1103956C"
+    "ClawRenderer": "0x0cCca6e79fA44CC1a1b772C7c956456E5609690a",
+    "ClawRegistry": "0x01949e45FabCD684bcD4747966145140aB4778E5",
+    "ClawEvolution": "0xed61D90c46343D0399de04a2CDEd195A217aa583",
+    "ClawReputation": "0x2E031ad274261e1a58C033d61F3b0f310c419904"
   }
 }
